@@ -1,7 +1,23 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <style>
+  div#products li{
+     display: inline;
+     margin-left: 20px;
+     
+ }
+ div#products li img{
+    width: 100px;
+ }
 
+ div#filters > div{
+     width: 200px;
+     display: inline;
+     float: left;
+     clear: both;
+ } 
+</style>
 
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width">
@@ -9,23 +25,8 @@
 </head>
 
 <body>
-<div>
-    <div id="color">
-        <h2> Color Filter</h2>
-    </div>
-    <br>
-    <div id="brand">
-        <h2> Brand Filter</h2>
-    </div>
-    <br>
-    <div id="toggle">
-        
-    </div>
-</div>
-    <br>
-    <div id="products">
-            <h2> Products</h2>
-        </div>
+<div id="filters"></div>
+<div id="products"></div>
     
     <script src="https://code.jquery.com/jquery-1.11.3.js"></script>
     <script src="js/hiddenExercise.js">
