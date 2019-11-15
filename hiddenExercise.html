@@ -11,12 +11,30 @@
     width: 100px;
  }
 
- div#filters > div{
+ div#filters {
      width: 200px;
      display: inline;
      float: left;
      clear: both;
  } 
+ .pagination { 
+    display: inline-block; 
+    font-weight:bold; 
+    font-size:20px; 
+    color: black; 
+    float: left; 
+    padding: 8px 16px; 
+    text-decoration: none; 
+    border: 1px solid black;
+    list-style-position:inside;
+} 
+  .centre {
+    display: flex;
+    justify-content: center;
+  }
+  .highlight {
+    background-color: coral;
+  } 
 </style>
 
   <meta charset="utf-8">
@@ -25,8 +43,9 @@
 </head>
 
 <body>
-<div id="filters"></div>
-<div id="products"></div>
+    <div id="filters"></div>
+    <div id="products"></div>
+    <div id="pagination"></div>
     
     <script src="https://code.jquery.com/jquery-1.11.3.js"></script>
     <script src="js/hiddenExercise.js">
