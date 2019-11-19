@@ -8,21 +8,37 @@ class Product {
   }
 }
 class ProductGrid {
-  constructor(jsonfilePath, filters, pagination, sortingOptions) {
+  constructor(jsonfilePath, filters, pagination, sortingOptions, containerObj) {
     this.jsonfilePath = jsonfilePath;
     this.filters = filters;
-    this.productDiv = $("#products");
-    this.paginationDiv = $("#pagination")
+    this.containerObj = containerObj;
     this.filtersSelected = [];
     this.isPaginationReq = pagination["paginationReq"];
     this.numberOfPages = pagination["numberOfPages"];
-    this.sortingOptions = sortingOptions["sortingOptions"];
+    this.sortingOptions = sortingOptions;
   }
   init() {
+    this.containerObj.forEach(element => {
+      if(element.containerName == "FilterDiv") {
+        this.filterDiv = $(element.containerId);
+      }
+      else if(element.containerName == "ProductDiv") {
+        this.productDiv = $(element.containerId);
+      }
+      else if(element.containerName == "PaginationDiv") {
+        this.paginationDiv = $(element.containerId);
+      }
+    })
     $.getJSON(this.jsonfilePath).done(this.loadJSONData).fail(this.loadingFailed);
   }
   loadJSONData = (data) => {
     this.jsonData = data;
+    this.filteredProduct = [];
+    this.jsonData.forEach(element => {
+      let product = new Product(element);
+      this.filteredProduct.push(product);
+    });
+    this.filteredData = this.filteredProduct;
     this.loadFilters();
     this.loadPaginationOption();
     this.loadSortingOptions();
@@ -32,58 +48,71 @@ class ProductGrid {
     console.log("failed");
   }
   loadFilters = () => {
-    this.filterDiv = $("#filters")
     this.filterProvided = new Set();
     this.filters.forEach(filterElement => {
-      let uniqueFilter = [];
-      let uniqueFilterForBoolean = [];
+      let uniqueFilter = new Set();
+      let uniqueFilterForBoolean = new Set();
       this.jsonData.forEach(dataElement => {
-        if(Object.keys(dataElement).indexOf(filterElement["filterName"]) > -1 && uniqueFilter.indexOf(dataElement[filterElement["filterName"]]) == -1 && filterElement["filterType"] == "multiple") {
-          uniqueFilter.push(dataElement[filterElement["filterName"]]);
+        if(filterElement["filterType"] == "multiple") {
+          uniqueFilter.add(dataElement[filterElement["filterName"]]);
           this.filterProvided.add(filterElement["filterName"]);
         }
-        else if(Object.keys(dataElement).indexOf(filterElement["filterName"]) > -1 && uniqueFilter.indexOf(dataElement[filterElement["filterName"]]) == -1 && filterElement["filterType"] == "boolean") {
-          uniqueFilterForBoolean.push(filterElement["filterName"]);
+        else if(filterElement["filterType"] == "boolean") {
+          uniqueFilterForBoolean.add(filterElement["filterName"]);
         }
-      })
-      this.filterDiv.append($("<B />", {text: `${filterElement["filterName"]} Filters`}));
-      uniqueFilter.forEach(element => {
-        this.filterDiv.append($("<li />", {value: element, text: element}).append($("<input />",{type: "checkbox", "data-filterKind": filterElement["filterName"], "data-filterName": element, "data-filterType": filterElement["filterType"]})));
-      })
-      if(uniqueFilterForBoolean.length) {
-        this.filterDiv.append($("<br>")).append($("<input />", {type: "checkbox", "data-filterType": filterElement["filterType"]})).append("Available Products");
+      });
+      this.displayMultipleFilters(filterElement, uniqueFilter);
+      if(uniqueFilterForBoolean.size) {
+        this.displayBooleanFilter(filterElement);
       }
     });
   }
+  displayMultipleFilters = (filterElement, uniqueFilter) => {
+    this.filterDiv.append($("<B />", {text: `${filterElement["filterName"]} Filters`}));
+      uniqueFilter.forEach(element => {
+        this.filterDiv.append($("<li />", {value: element, text: element}).append($("<input />",{type: "checkbox", "data-filterKind": filterElement["filterName"], "data-filterName": element, "data-filterType": filterElement["filterType"]})));
+      });
+  }
+  displayBooleanFilter = (filterElement) => {
+    this.filterDiv.append($("<br>")).append($("<input />", {type: "checkbox", "data-filterType": filterElement["filterType"]})).append("Available Products");
+  }
   loadPaginationOption = () => {
-    if(this.isPaginationReq && this.numberOfPages.length) {
-      this.filterDiv.append($("<div />", {id: "paginationDiv"})).append($("<B />", {text: "Products per page  "})).append($("<select />", {"data-pagination": "required"}));
-      if($("pagination")) {
-        this.numberOfPages.forEach(element => {
-          $("[data-pagination='required']").append($("<option />",{value: element, text: element}));
-        })
-      }
-    }
+    this.displayPageNumber();
     this.selectedPage = 1;
     $("[data-pagination='required']").change(this.showPagination);
     this.totalNoOfPages = $("[data-pagination='required'] :selected").get(0).value; 
   }
+  displayPageNumber = () => {
+    if(this.isPaginationReq && this.numberOfPages.length) {
+      this.filterDiv.append($("<div />", {id: "paginationDiv"})).append($("<B />", {text: "Products per page  "})).append($("<select />", {"data-pagination": "required"}));
+      if($("pagination")) {
+        let options = [];
+        this.numberOfPages.forEach(element => {
+          options.push($("<option />",{value: element, text: element}));
+        });
+        $("[data-pagination='required']").append(options);
+      }
+    }
+  }
   loadSortingOptions = () => {
-    this.filterDiv.append($("<div />", {id: "sortFilter"})).append($("<B />",{text: "Sorting Options"})).append($("<select />", {"data-sortOptions": "required"}));
-    this.sortingOptions.forEach(element => {
-      let sortFilterName = /(?:Sort by )(.*)/;
-      $("[data-sortOptions='required']").append($("<option />", {value: (element.match(sortFilterName))[1].toLowerCase(), text: element}));
-    });
+    this.displaySortOptions();
     this.selectedSortOption = $("[data-sortOptions='required'] :selected").get(0).value;
     $("[data-sortoptions='required']").change(this.selectSortOption);
-    this.sortAndDisplay(this.jsonData, false);
+    this.sortAndDisplay(this.filteredData, false);
+  }
+  displaySortOptions = () => {
+    let textForSelect = $("<B />",{text: "Sorting Options"}).append($("<select />", {"data-sortOptions": "required"}));
+    let divForSelectOptions = $("<div />", {id: "sortFilter"}).append(textForSelect);
+    this.filterDiv.append(divForSelectOptions);
+    let options = [];
+    this.sortingOptions.forEach(element => {
+      options.push($("<option />", {value: element.sortBy, text: element.displayName}));
+    });
+    $("[data-sortOptions='required']").append(options);
   }
   selectSortOption = (event) => {
     this.selectedSortOption = event.currentTarget.value;
     this.selectedPage = 1;
-    if(this.selectedSortOption == "availability") {
-      this.selectedSortOption = "sold_out";
-    }
     this.sortAndDisplay(this.filteredProduct, this.booleanFilters.is(":checked"));
   }
   sortAndDisplay = (products, availability) => {
@@ -114,10 +143,9 @@ class ProductGrid {
       });
     } 
     this.filteredProduct = products;
-    this.displayProduct(this.filteredProduct, availability);
+    this.displayProduct(this.filteredProduct, availability)
   }
   loadPage = () => {
-    this.filteredProduct = this.jsonData;
     this.displayProduct(this.filteredProduct, false);
     this.multipleFilters = $("[data-filterType='multiple']");
     this.booleanFilters = $("[data-filterType='boolean']");
@@ -128,25 +156,25 @@ class ProductGrid {
     this.selectedPage = 1;
     let checkBox = $(event.target);
     let filterAlreadyPresent = 0;
+    this.filteredProduct = this.filteredData;
     let filterKind = [];
-    this.filteredProduct = this.jsonData;
     for (let i = 0; i < this.filtersSelected.length; i++) {
       if(this.filtersSelected[i].data("filtername") == checkBox.data("filtername")) {
         this.filtersSelected.splice(i, 1);
         i--;
         filterAlreadyPresent = 1;
-      }
+      }                  
     }
     if(!filterAlreadyPresent) {
       this.filtersSelected.push(checkBox);
     }
     this.seperateFiltersBasedOnKind();
     this.totalFiters.forEach(element => {
-      if(element.length) {
+      if(element.length){
         this.ProductsBasedOnFilters(element, this.filteredProduct);
       }
     });
-    this.displayProduct(this.filteredProduct, this.booleanFilters.is(":checked"));
+    this.sortAndDisplay(this.filteredProduct,this.booleanFilters.is(":checked"));
   }
   seperateFiltersBasedOnKind = () => {
     this.totalFiters = [];
@@ -169,7 +197,12 @@ class ProductGrid {
         }
       });
     });
-    this.filteredProduct = tempProducts;
+    if(tempProducts.length) {
+      this.filteredProduct = tempProducts;
+    }
+    else {
+      this.filteredProduct = products;
+    }
   }
   filterAvailability = (event) => {
     this.selectedPage = 1;
@@ -181,18 +214,21 @@ class ProductGrid {
     this.displayProduct(this.filteredProduct, this.booleanFilters.is(":checked"));
   }
   displayProduct = (filteredProduct, availabilityCheckbox) => {
-    this.products = []; 
+    this.products = [];
+    this.filteredProduct = []; 
     var productsPerPage = [];
       if(availabilityCheckbox) {
         for(let i = 0; i < filteredProduct.length; i++) {
           if(filteredProduct[i]["sold_out"] == "0") {
             this.products.push($("<li />", {name: filteredProduct[i]["name"]}).append($("<img />", {src:"images/" + filteredProduct[i]["url"]})));
+            this.filteredProduct.push(filteredProduct[i]);
           }
         }
       }
       else {
         for(let i = 0; i < filteredProduct.length; i++) {
           this.products.push($("<li />", {name: filteredProduct[i]["name"]}).append($("<img />", {src:"images/" + filteredProduct[i]["url"]})));
+          this.filteredProduct.push(filteredProduct[i]);
         }
       }
       this.displayPagination(this.products);
@@ -217,7 +253,6 @@ class ProductGrid {
     this.selectedPage = event.target.value;
     this.pageNoToBeHighlighted = $(event.target);
     this.productsToBeDisplayedPerPage(this.totalNoOfPages, this.selectedPage, this.products);
-    
   }
   productsToBeDisplayedPerPage = (totalPages, pageNo, products) => {
     var productsPerPage = [];
@@ -232,6 +267,18 @@ class ProductGrid {
   }
 }
 $(document).ready(function() {
-var productGrid = new ProductGrid("data/product.json",[{filterName: "color", filterType:"multiple"}, {filterName: "brand", filterType:"multiple"}, {filterName: "sold_out", filterType:"boolean"}], {paginationReq: true, numberOfPages: [3,6,9]}, {sortingOptions: ["Sort by Name", "Sort by Color", "Sort by Availability", "Sort by Brand"]});
-productGrid.init();
+  var containerObj = [{containerName: "FilterDiv", containerId: "#filters"}, 
+                      {containerName: "ProductDiv", containerId: "#products"}, 
+                      {containerName: "PaginationDiv", containerId: "#pagination"}];
+  var sortingOptions = [{displayName: "Sort By Name", sortBy: "name"}, 
+                        {displayName: "Sort By Color", sortBy: "color"}, 
+                        {displayName: "Sort By Availabilty", sortBy: "sold_out"}, 
+                        {displayName: "Sort By Brand", sortBy: "brand"}];
+  var filters = [{filterName: "color", filterType:"multiple"}, 
+                 {filterName: "brand", filterType:"multiple"}, 
+                 {filterName: "sold_out", filterType:"boolean"}];
+  var paginationObj = {paginationReq: true, numberOfPages: [3,6,9]};
+  var jsonFilePath = "data/product.json";
+  var productGrid = new ProductGrid(jsonFilePath, filters, paginationObj, sortingOptions, containerObj);
+  productGrid.init();
 });
