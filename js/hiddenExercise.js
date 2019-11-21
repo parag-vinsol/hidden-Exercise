@@ -29,9 +29,16 @@ class ProductGrid {
         this.paginationDiv = $(element.containerId);
       }
     })
+    this.location = window.location;
+    this.url = new URLSearchParams({filters: "",
+                                    productsPerPage: "",
+                                    availability: "",
+                                    selectedPage: "",
+                                    sortBy: ""});
     $.getJSON(this.jsonfilePath).done(this.loadJSONData).fail(this.loadingFailed);
   }
   loadJSONData = (data) => {
+    this.getHashValuesFromURL();
     this.jsonData = data;
     this.filteredProduct = [];
     this.jsonData.forEach(element => {
@@ -42,7 +49,45 @@ class ProductGrid {
     this.loadFilters();
     this.loadPaginationOption();
     this.loadSortingOptions();
+    this.loadAvailibility();
     this.loadPage();
+    
+    this.getFiltersFromHash();
+  }
+  getFiltersFromHash = () => {
+    this.FiltersFromHash = [];
+    if(this.totalFilterSelected != undefined) {
+      let filters = this.totalFilterSelected.split("_");
+      filters.forEach(element => {
+        if(element.length) {
+          this.FiltersFromHash.push(element.replace("+", " "))
+        }
+      })
+    }
+    this.applyFilters();
+  }
+  applyFilters = () => {
+    this.FiltersFromHash.forEach(element => {
+      let filterToBeChecked = this.filterDiv.find(`[data-filtername='${element}']`);
+      if(filterToBeChecked.length) { 
+        filterToBeChecked.prop("checked", true);
+        this.filterOutWithCurrentTarget(filterToBeChecked);
+      }
+    })
+  }
+  getHashValuesFromURL = () => {
+    this.hashValues = new URLSearchParams(document.location.hash.substr(1));
+    this.totalFilterSelected = this.hashValues.get("filters");
+    this.totalNoOfPages = this.hashValues.get("productsPerPage");
+    this.availability = this.hashValues.get("availability");
+    this.selectedPage = this.hashValues.get("selectedPage");
+    this.selectedSortOption = this.hashValues.get("sortBy");
+    if(this.availability == "true") {
+      this.availability = true;
+    }
+    else {
+      this.availability = false;
+    }
   }
   loadingFailed = () => {
     console.log("failed");
@@ -69,18 +114,32 @@ class ProductGrid {
   }
   displayMultipleFilters = (filterElement, uniqueFilter) => {
     this.filterDiv.append($("<B />", {text: `${filterElement["filterName"]} Filters`}));
-      uniqueFilter.forEach(element => {
-        this.filterDiv.append($("<li />", {value: element, text: element}).append($("<input />",{type: "checkbox", "data-filterKind": filterElement["filterName"], "data-filterName": element, "data-filterType": filterElement["filterType"]})));
-      });
+    uniqueFilter.forEach(element => {
+      this.filterDiv.append($("<li />", {value: element, text: element}).append($("<input />",{type: "checkbox", "data-filterKind": filterElement["filterName"], "data-filterName": element, "data-filterType": filterElement["filterType"]})));
+    });
+    this.multipleFilters = $("[data-filterType='multiple']");
   }
   displayBooleanFilter = (filterElement) => {
     this.filterDiv.append($("<br>")).append($("<input />", {type: "checkbox", "data-filterType": filterElement["filterType"]})).append("Available Products");
+    this.booleanFilters = $("[data-filterType='boolean']");
   }
   loadPaginationOption = () => {
     this.displayPageNumber();
-    this.selectedPage = 1;
     $("[data-pagination='required']").change(this.showPagination);
-    this.totalNoOfPages = $("[data-pagination='required'] :selected").get(0).value; 
+    if(this.totalNoOfPages == undefined || !$(`[data-pagination='required'] [value=${this.totalNoOfPages}]`).length) {
+      this.totalNoOfPages = $("[data-pagination='required'] :selected").get(0).value; 
+    }
+    this.selectTheNoOfPages();
+    this.selectThePage();
+  }
+  selectTheNoOfPages = () => {
+    $(`[data-pagination='required'] [value=${this.totalNoOfPages}]`).prop("selected", true);
+  }
+  selectThePage = () => {
+    let maxNumberOfPages = Math.ceil(this.filteredProduct.length / this.totalNoOfPages);
+    if(this.selectedPage == undefined || this.selectedPage > maxNumberOfPages) {
+      this.selectedPage = 1;
+    }
   }
   displayPageNumber = () => {
     if(this.isPaginationReq && this.numberOfPages.length) {
@@ -96,9 +155,9 @@ class ProductGrid {
   }
   loadSortingOptions = () => {
     this.displaySortOptions();
-    this.selectedSortOption = $("[data-sortOptions='required'] :selected").get(0).value;
+    this.selectSelectedSortOption();
     $("[data-sortoptions='required']").change(this.selectSortOption);
-    this.sortAndDisplay(this.filteredData, false);
+    this.sortAndDisplay(this.filteredData, this.availability);
   }
   displaySortOptions = () => {
     let textForSelect = $("<B />",{text: "Sorting Options"}).append($("<select />", {"data-sortOptions": "required"}));
@@ -110,10 +169,18 @@ class ProductGrid {
     });
     $("[data-sortOptions='required']").append(options);
   }
+  selectSelectedSortOption = () => {
+    if(!$(`[data-sortoptions='required'] [value=${this.selectedSortOption}]`).length || this.selectedSortOption == undefined) {
+      this.selectedSortOption = $("[data-sortOptions='required'] :selected").get(0).value;
+    }
+    else {
+      $(`[data-sortoptions='required'] [value=${this.selectedSortOption}]`).prop("selected", true);
+    }
+  }
   selectSortOption = (event) => {
     this.selectedSortOption = event.currentTarget.value;
     this.selectedPage = 1;
-    this.sortAndDisplay(this.filteredProduct, this.booleanFilters.is(":checked"));
+    this.sortAndDisplay(this.filteredProduct, this.availability);
   }
   sortAndDisplay = (products, availability) => {
     if(this.selectedSortOption == "name") {
@@ -143,18 +210,21 @@ class ProductGrid {
       });
     } 
     this.filteredProduct = products;
+    this.url.set("sortBy", this.selectedSortOption);
+    //this.location.hash = this.url;
     this.displayProduct(this.filteredProduct, availability)
   }
   loadPage = () => {
     this.displayProduct(this.filteredProduct, false);
-    this.multipleFilters = $("[data-filterType='multiple']");
-    this.booleanFilters = $("[data-filterType='boolean']");
     this.multipleFilters.click(this.filterOut);
     this.booleanFilters.click(this.filterAvailability);
   }
   filterOut = (event) => {
     this.selectedPage = 1;
-    let checkBox = $(event.target);
+    this.filterOutWithCurrentTarget($(event.target));
+  }
+  filterOutWithCurrentTarget = (targetEvent) => {
+    let checkBox = targetEvent;
     let filterAlreadyPresent = 0;
     this.filteredProduct = this.filteredData;
     let filterKind = [];
@@ -169,12 +239,22 @@ class ProductGrid {
       this.filtersSelected.push(checkBox);
     }
     this.seperateFiltersBasedOnKind();
-    this.totalFiters.forEach(element => {
-      if(element.length){
-        this.ProductsBasedOnFilters(element, this.filteredProduct);
-      }
-    });
-    this.sortAndDisplay(this.filteredProduct,this.booleanFilters.is(":checked"));
+    this.totalFilterSelected = "";
+    this.sendFilterOneByOne(this.filteredProduct);
+    this.sortAndDisplay(this.filteredProduct, this.availability);
+  }
+  sendFilterOneByOne = (products) => {
+    this.productsRemaining = products;
+    if(this.totalFiters) {
+      this.totalFiters.forEach(element => {
+        if(element.length){
+          this.productsBasedOnFilters(element, this.productsRemaining);
+        }
+      });
+    }
+    else {
+      this.productsBasedOnFilters(null, this.productsRemaining);
+    }
   }
   seperateFiltersBasedOnKind = () => {
     this.totalFiters = [];
@@ -188,51 +268,62 @@ class ProductGrid {
       this.totalFiters.push(oneTypeOfFilters);
     });
   }
-  ProductsBasedOnFilters = (filters, products) => {
+  productsBasedOnFilters = (filters, products) => {
     let tempProducts = [];
-    filters.forEach(filterElement => {
-      products.forEach(productElement => { 
-        if(Object.values(productElement).indexOf(filterElement) != -1) {
-          tempProducts.push(productElement);
-        }
+    if(filters) {
+      filters.forEach(filterElement => {
+        this.totalFilterSelected = this.totalFilterSelected + filterElement + "_";
+        products.forEach(productElement => { 
+          if(Object.values(productElement).indexOf(filterElement) != -1) {
+            tempProducts.push(productElement);
+          }
+        });
       });
-    });
+    }
     if(tempProducts.length) {
       this.filteredProduct = tempProducts;
     }
     else {
       this.filteredProduct = products;
     }
+    this.productsRemaining = this.filteredProduct;
+  }
+  loadAvailibility = () => {
+    if(this.availability) {
+      this.booleanFilters.prop("checked", this.availability);
+    }
   }
   filterAvailability = (event) => {
     this.selectedPage = 1;
-    this.displayProduct(this.filteredProduct, $(event.target).is(":checked"));
+    this.availability = $(event.target).is(":checked");
+    this.sendFilterOneByOne(this.filteredData);
+    this.displayProduct(this.filteredProduct, this.availability);
   }
   showPagination = (event) => {
     this.selectedPage = 1;
     this.totalNoOfPages = event.currentTarget.value;
-    this.displayProduct(this.filteredProduct, this.booleanFilters.is(":checked"));
+    this.displayProduct(this.filteredProduct, this.availability);
   }
   displayProduct = (filteredProduct, availabilityCheckbox) => {
     this.products = [];
     this.filteredProduct = []; 
     var productsPerPage = [];
-      if(availabilityCheckbox) {
-        for(let i = 0; i < filteredProduct.length; i++) {
-          if(filteredProduct[i]["sold_out"] == "0") {
-            this.products.push($("<li />", {name: filteredProduct[i]["name"]}).append($("<img />", {src:"images/" + filteredProduct[i]["url"]})));
-            this.filteredProduct.push(filteredProduct[i]);
-          }
-        }
-      }
-      else {
-        for(let i = 0; i < filteredProduct.length; i++) {
+    if(availabilityCheckbox) {
+      for(let i = 0; i < filteredProduct.length; i++) {
+        if(filteredProduct[i]["sold_out"] == "0") {
           this.products.push($("<li />", {name: filteredProduct[i]["name"]}).append($("<img />", {src:"images/" + filteredProduct[i]["url"]})));
           this.filteredProduct.push(filteredProduct[i]);
         }
       }
-      this.displayPagination(this.products);
-      productsPerPage = this.productsToBeDisplayedPerPage(this.totalNoOfPages, this.selectedPage, this.products);
+    }
+    else {
+      for(let i = 0; i < filteredProduct.length; i++) {
+        this.products.push($("<li />", {name: filteredProduct[i]["name"]}).append($("<img />", {src:"images/" + filteredProduct[i]["url"]})));
+        this.filteredProduct.push(filteredProduct[i]);
+      }
+    }
+    this.displayPagination(this.products);
+    this.productsToBeDisplayedPerPage(this.totalNoOfPages, this.selectedPage, this.products);
   }
   displayPagination = (products) => {
     let listOfPageNumbers = [];
@@ -246,7 +337,7 @@ class ProductGrid {
     });
     this.paginationDiv.find("ul").html(displayListOfPagination);
     this.paginationDiv.find("li").click(this.selectPage);
-    this.pageNoToBeHighlighted = this.paginationDiv.find("li").first();
+    this.pageNoToBeHighlighted = this.paginationDiv.find(`[value=${this.selectedPage}]`)
   }
   selectPage = (event) => {
     this.pageNoToBeHighlighted.removeClass("highlight");
@@ -264,6 +355,18 @@ class ProductGrid {
     }
     this.productDiv.html(productsPerPage);
     this.pageNoToBeHighlighted.addClass("highlight");
+    this.setURLParams();
+  }
+  setURLParams = () => {
+    if(!this.totalFilterSelected) {
+      this.totalFilterSelected = ""; 
+    }
+    this.url.set("sortBy", this.selectedSortOption);
+    this.url.set("selectedPage", this.selectedPage);
+    this.url.set("productsPerPage", this.totalNoOfPages);
+    this.url.set("availability", this.availability);
+    this.url.set("filters", this.totalFilterSelected);
+    this.location.hash = this.url;
   }
 }
 $(document).ready(function() {
@@ -275,8 +378,8 @@ $(document).ready(function() {
                         {displayName: "Sort By Availabilty", sortBy: "sold_out"}, 
                         {displayName: "Sort By Brand", sortBy: "brand"}];
   var filters = [{filterName: "color", filterType:"multiple"}, 
-                 {filterName: "brand", filterType:"multiple"}, 
-                 {filterName: "sold_out", filterType:"boolean"}];
+                {filterName: "brand", filterType:"multiple"}, 
+                {filterName: "sold_out", filterType:"boolean"}];
   var paginationObj = {paginationReq: true, numberOfPages: [3,6,9]};
   var jsonFilePath = "data/product.json";
   var productGrid = new ProductGrid(jsonFilePath, filters, paginationObj, sortingOptions, containerObj);
